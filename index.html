@@ -1014,11 +1014,12 @@ function mountSheetDrag(layer, cfg, state) {
   let startY = null, curSlide = null, peekSlide = null, active = false;
 
   function beginDrag(clientY) {
-    if (busy) return;
+    if (busy) return false;
     startY = clientY;
     active = true;
     curSlide = vp.querySelector('.screen-slide');
-    curSlide.style.willChange = 'transform';
+    curSlide.style.willChange = 'transform, opacity';
+    curSlide.style.transformOrigin = 'top center';
 
     peekSlide = document.createElement('div');
     peekSlide.className = 'screen-slide';
@@ -1028,6 +1029,7 @@ function mountSheetDrag(layer, cfg, state) {
     peekSlide.appendChild(img);
     peekSlide.style.cssText = 'position:absolute; inset:0; transform:translateY(100%); will-change:transform;';
     vp.appendChild(peekSlide);
+    return true;
   }
 
   function moveDrag(clientY) {
@@ -1035,7 +1037,10 @@ function mountSheetDrag(layer, cfg, state) {
     const s = getPhoneScale();
     const pullUp = Math.max(0, (startY - clientY) / s);
     const progress = Math.min(pullUp / 280, 1);
-    curSlide.style.transform = `translateY(${-pullUp * 0.12}px)`;
+    // Preview shrinks and fades as sheet rises
+    const sc = 1 - progress * 0.12;
+    curSlide.style.transform = `scale(${sc})`;
+    curSlide.style.opacity = 1 - progress * 0.85;
     peekSlide.style.transform = `translateY(${(1 - progress) * 100}%)`;
   }
 
@@ -1048,9 +1053,11 @@ function mountSheetDrag(layer, cfg, state) {
 
     function completeNav() {
       busy = true;
-      curSlide.style.transition = `transform 0.25s ${ease}`;
+      const t = `transform 0.25s ${ease}, opacity 0.25s ${ease}`;
+      curSlide.style.transition = t;
       peekSlide.style.transition = `transform 0.25s ${ease}`;
-      curSlide.style.transform = 'translateY(-8%)';
+      curSlide.style.transform = 'scale(0.88)';
+      curSlide.style.opacity = '0';
       peekSlide.style.transform = 'translateY(0)';
       setTimeout(() => {
         curSlide.remove();
@@ -1067,20 +1074,28 @@ function mountSheetDrag(layer, cfg, state) {
       completeNav();
     } else {
       // Snap back
-      curSlide.style.transition = `transform 0.2s ${ease}`;
-      peekSlide.style.transition = `transform 0.2s ${ease}`;
+      const t = `transform 0.22s ${ease}, opacity 0.22s ${ease}`;
+      curSlide.style.transition = t;
+      peekSlide.style.transition = `transform 0.22s ${ease}`;
       curSlide.style.transform = '';
+      curSlide.style.opacity = '';
       peekSlide.style.transform = 'translateY(100%)';
       setTimeout(() => {
         if (peekSlide) { peekSlide.remove(); peekSlide = null; }
-        if (curSlide) { curSlide.style.transition = ''; curSlide.style.willChange = ''; curSlide = null; }
-      }, 200);
+        if (curSlide) {
+          curSlide.style.transition = '';
+          curSlide.style.willChange = '';
+          curSlide.style.transformOrigin = '';
+          curSlide = null;
+        }
+      }, 220);
     }
   }
 
   zone.addEventListener('mousedown', (e) => {
     e.stopPropagation();
-    beginDrag(e.clientY);
+    e.preventDefault();
+    if (!beginDrag(e.clientY)) return;
     const onMove = (e) => moveDrag(e.clientY);
     const onUp = (e) => { endDrag(e.clientY); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     document.addEventListener('mousemove', onMove);
