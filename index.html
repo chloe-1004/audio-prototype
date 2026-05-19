@@ -1006,42 +1006,44 @@ function mountTrackToggle(layer, cfg, state) {
 function mountSheetDrag(layer, cfg, state) {
   layer.style.pointerEvents = 'auto';
 
+  const sheetY = cfg.sheetY !== undefined ? cfg.sheetY : cfg.handleY;
+
+  // Sheet panel: overlaid on top of S13's sheet area, shows S14 content.
+  // Starts at sheetY (natural sheet position) so animation is in-screen, not off-screen.
+  const sheetPanel = mk('div', '');
+  sheetPanel.style.cssText = `position:absolute; left:0; top:${sheetY}px; width:393px; height:852px; background-image:url('images/${S[cfg.target].f}.png'); background-size:393px 852px; background-position:0 0; pointer-events:none; z-index:11; opacity:0;`;
+  layer.appendChild(sheetPanel);
+
+  // Drag zone: pill handle + categories area (above the list item hotspots at y=630)
   const zone = mk('div', '');
-  zone.style.cssText = `position:absolute; left:0; top:${cfg.handleY - 50}px; width:393px; height:120px; cursor:grab; z-index:12; touch-action:none; pointer-events:auto;`;
+  zone.style.cssText = `position:absolute; left:0; top:${cfg.handleY - 50}px; width:393px; height:${Math.max(120, 630 - cfg.handleY + 50)}px; cursor:grab; z-index:12; touch-action:none; pointer-events:auto;`;
   layer.appendChild(zone);
 
   const vp = document.getElementById('viewport');
-  let startY = null, curSlide = null, peekSlide = null, active = false;
+  let startY = null, active = false, curSlide = null;
 
   function beginDrag(clientY) {
     if (busy) return false;
     startY = clientY;
     active = true;
+    sheetPanel.style.opacity = '1';
     curSlide = vp.querySelector('.screen-slide');
     curSlide.style.willChange = 'transform, opacity';
     curSlide.style.transformOrigin = 'top center';
-
-    peekSlide = document.createElement('div');
-    peekSlide.className = 'screen-slide';
-    const img = document.createElement('img');
-    img.src = 'images/' + S[cfg.target].f + '.png';
-    img.draggable = false;
-    peekSlide.appendChild(img);
-    peekSlide.style.cssText = 'position:absolute; inset:0; transform:translateY(100%); will-change:transform;';
-    vp.appendChild(peekSlide);
     return true;
   }
 
   function moveDrag(clientY) {
-    if (!active) return;
+    if (!active || !curSlide) return;
     const s = getPhoneScale();
     const pullUp = Math.max(0, (startY - clientY) / s);
-    const progress = Math.min(pullUp / 280, 1);
-    // Preview shrinks and fades as sheet rises
-    const sc = 1 - progress * 0.12;
-    curSlide.style.transform = `scale(${sc})`;
-    curSlide.style.opacity = 1 - progress * 0.85;
-    peekSlide.style.transform = `translateY(${(1 - progress) * 100}%)`;
+    const newTop = Math.max(0, sheetY - pullUp);
+    sheetPanel.style.top = newTop + 'px';
+
+    // Background shrinks and fades as sheet rises
+    const progress = Math.min(pullUp / sheetY, 1);
+    curSlide.style.transform = `scale(${1 - progress * 0.12})`;
+    curSlide.style.opacity = 1 - progress * 0.9;
   }
 
   function endDrag(clientY) {
@@ -1053,35 +1055,44 @@ function mountSheetDrag(layer, cfg, state) {
 
     function completeNav() {
       busy = true;
-      const t = `transform 0.25s ${ease}, opacity 0.25s ${ease}`;
-      curSlide.style.transition = t;
-      peekSlide.style.transition = `transform 0.25s ${ease}`;
-      curSlide.style.transform = 'scale(0.88)';
-      curSlide.style.opacity = '0';
-      peekSlide.style.transform = 'translateY(0)';
+      sheetPanel.style.transition = `top 0.28s ${ease}`;
+      sheetPanel.style.top = '0px';
+      if (curSlide) {
+        curSlide.style.transition = `transform 0.28s ${ease}, opacity 0.28s ${ease}`;
+        curSlide.style.transform = 'scale(0.88)';
+        curSlide.style.opacity = '0';
+      }
       setTimeout(() => {
-        curSlide.remove();
-        peekSlide.style.transition = '';
-        peekSlide.style.transform = '';
+        if (curSlide) { curSlide.remove(); curSlide = null; }
+        sheetPanel.remove();
+        // Place S14 as new screen (seamless handoff since panel already shows S14)
+        const sl = document.createElement('div');
+        sl.className = 'screen-slide';
+        const img = document.createElement('img');
+        img.src = 'images/' + S[cfg.target].f + '.png';
+        img.draggable = false;
+        sl.appendChild(img);
+        vp.appendChild(sl);
         cur = cfg.target;
         busy = false;
-        curSlide = null; peekSlide = null;
         updateMeta(); renderHS(); mountOverlay(cur);
-      }, 260);
+      }, 290);
     }
 
     if (pullUp >= cfg.threshold || pullUp < 10) {
       completeNav();
     } else {
       // Snap back
-      const t = `transform 0.22s ${ease}, opacity 0.22s ${ease}`;
-      curSlide.style.transition = t;
-      peekSlide.style.transition = `transform 0.22s ${ease}`;
-      curSlide.style.transform = '';
-      curSlide.style.opacity = '';
-      peekSlide.style.transform = 'translateY(100%)';
+      sheetPanel.style.transition = `top 0.22s ${ease}, opacity 0.22s ${ease}`;
+      sheetPanel.style.top = sheetY + 'px';
+      sheetPanel.style.opacity = '0';
+      if (curSlide) {
+        curSlide.style.transition = `transform 0.22s ${ease}, opacity 0.22s ${ease}`;
+        curSlide.style.transform = '';
+        curSlide.style.opacity = '';
+      }
       setTimeout(() => {
-        if (peekSlide) { peekSlide.remove(); peekSlide = null; }
+        sheetPanel.style.transition = '';
         if (curSlide) {
           curSlide.style.transition = '';
           curSlide.style.willChange = '';
@@ -1093,8 +1104,7 @@ function mountSheetDrag(layer, cfg, state) {
   }
 
   zone.addEventListener('mousedown', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
+    e.stopPropagation(); e.preventDefault();
     if (!beginDrag(e.clientY)) return;
     const onMove = (e) => moveDrag(e.clientY);
     const onUp = (e) => { endDrag(e.clientY); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
@@ -1104,7 +1114,7 @@ function mountSheetDrag(layer, cfg, state) {
 
   zone.addEventListener('touchstart', (e) => {
     e.stopPropagation(); e.preventDefault();
-    beginDrag(e.touches[0].clientY);
+    if (!beginDrag(e.touches[0].clientY)) return;
     const onMove = (e) => { e.preventDefault(); moveDrag(e.touches[0].clientY); };
     const onUp = (e) => { endDrag(e.changedTouches[0].clientY); document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onUp); };
     document.addEventListener('touchmove', onMove, { passive: false });
