@@ -269,12 +269,14 @@ body {
   border-radius: 48px;
   overflow: visible;
   z-index: 10;
+  pointer-events: none; /* pass-through so ix-layer can receive events where no .hs exists */
 }
 .hs {
   position: absolute;
   cursor: pointer;
   border-radius: 6px;
   transition: background .12s, box-shadow .12s;
+  pointer-events: auto;
 }
 /* hover: always visible ripple */
 .hs:hover {
@@ -507,7 +509,7 @@ const HOTSPOTS = {
       ],
   12: [ {to:11, label:"뒤로",       ...px(16,53,44,44)},                       // 미리보기 화면
       ],
-  13: [ {to:14, label:"오디오 선택",...px(0,418,393,380)},                     // 오디오 목록 진입 (리스트 영역 y=418~)
+  13: [ {to:14, label:"오디오 선택",...px(0,630,393,170)},                     // 리스트 항목 영역만 (y=630~800, pill/카테고리 제외)
         {to:16, label:"다음",        ...px(305,53,72,44)},                      // 상단 '다음' 버튼 → S16
         {to:9,  label:"뒤로",       ...px(16,53,44,44)},
       ],
@@ -729,7 +731,7 @@ function jumpTo(idx) {
 // ── INTERACTIVE OVERLAYS ───────────────────────────────────────
 // Exact Figma coordinates (in 393x852 px space)
 const OVERLAYS = {
-  13: { type:'sheet-drag', handleY:308, target:14, threshold:50 },
+  13: { type:'sheet-drag', handleY:522, target:14, threshold:100 },
   3: { type:'crop', range:[45,315], handles:[45,315], timelineY:653, timelineH:54, outerY:613, outerH:156 },
   4: { type:'crop', range:[45,315], handles:[185,279], timelineY:653, timelineH:54, outerY:613, outerH:156 },
   14: { type:'playback', barX:56, barY:245, barW:281, barH:4, dotY:241, dotSize:12, timeX:16, timeY:240, duration:58 },
@@ -1004,54 +1006,94 @@ function mountTrackToggle(layer, cfg, state) {
 function mountSheetDrag(layer, cfg, state) {
   layer.style.pointerEvents = 'auto';
 
-  // Hit zone: covers the pill handle area and a bit above/below
   const zone = mk('div', '');
-  zone.style.cssText = `position:absolute; left:0; top:${cfg.handleY - 40}px; width:393px; height:100px; cursor:grab; z-index:12; touch-action:none;`;
+  zone.style.cssText = `position:absolute; left:0; top:${cfg.handleY - 50}px; width:393px; height:120px; cursor:grab; z-index:12; touch-action:none; pointer-events:auto;`;
   layer.appendChild(zone);
 
-  let startY = null;
-  let triggered = false;
+  const vp = document.getElementById('viewport');
+  let startY = null, curSlide = null, peekSlide = null, active = false;
 
-  function tryNav() {
-    if (triggered) return;
-    triggered = true;
-    navigate(cfg.target, 'up');
+  function beginDrag(clientY) {
+    if (busy) return;
+    startY = clientY;
+    active = true;
+    curSlide = vp.querySelector('.screen-slide');
+    curSlide.style.willChange = 'transform';
+
+    peekSlide = document.createElement('div');
+    peekSlide.className = 'screen-slide';
+    const img = document.createElement('img');
+    img.src = 'images/' + S[cfg.target].f + '.png';
+    img.draggable = false;
+    peekSlide.appendChild(img);
+    peekSlide.style.cssText = 'position:absolute; inset:0; transform:translateY(100%); will-change:transform;';
+    vp.appendChild(peekSlide);
   }
 
-  function onMove(y) {
-    if (triggered) return;
-    if (startY - y > cfg.threshold) tryNav();
+  function moveDrag(clientY) {
+    if (!active) return;
+    const s = getPhoneScale();
+    const pullUp = Math.max(0, (startY - clientY) / s);
+    const progress = Math.min(pullUp / 280, 1);
+    curSlide.style.transform = `translateY(${-pullUp * 0.12}px)`;
+    peekSlide.style.transform = `translateY(${(1 - progress) * 100}%)`;
   }
 
-  function onUp(y) {
-    if (!triggered) tryNav();
-    cleanup();
-  }
+  function endDrag(clientY) {
+    if (!active) return;
+    active = false;
+    const s = getPhoneScale();
+    const pullUp = Math.max(0, (startY - clientY) / s);
+    const ease = 'cubic-bezier(0.4,0,0.2,1)';
 
-  function cleanup() {
-    document.removeEventListener('mousemove', onMM);
-    document.removeEventListener('mouseup', onMU);
-    document.removeEventListener('touchmove', onTM);
-    document.removeEventListener('touchend', onTE);
-  }
+    function completeNav() {
+      busy = true;
+      curSlide.style.transition = `transform 0.25s ${ease}`;
+      peekSlide.style.transition = `transform 0.25s ${ease}`;
+      curSlide.style.transform = 'translateY(-8%)';
+      peekSlide.style.transform = 'translateY(0)';
+      setTimeout(() => {
+        curSlide.remove();
+        peekSlide.style.transition = '';
+        peekSlide.style.transform = '';
+        cur = cfg.target;
+        busy = false;
+        curSlide = null; peekSlide = null;
+        updateMeta(); renderHS(); mountOverlay(cur);
+      }, 260);
+    }
 
-  function onMM(e) { onMove(e.clientY); }
-  function onMU(e) { onUp(e.clientY); }
-  function onTM(e) { e.preventDefault(); onMove(e.touches[0].clientY); }
-  function onTE(e) { onUp(e.changedTouches[0].clientY); }
+    if (pullUp >= cfg.threshold || pullUp < 10) {
+      completeNav();
+    } else {
+      // Snap back
+      curSlide.style.transition = `transform 0.2s ${ease}`;
+      peekSlide.style.transition = `transform 0.2s ${ease}`;
+      curSlide.style.transform = '';
+      peekSlide.style.transform = 'translateY(100%)';
+      setTimeout(() => {
+        if (peekSlide) { peekSlide.remove(); peekSlide = null; }
+        if (curSlide) { curSlide.style.transition = ''; curSlide.style.willChange = ''; curSlide = null; }
+      }, 200);
+    }
+  }
 
   zone.addEventListener('mousedown', (e) => {
     e.stopPropagation();
-    startY = e.clientY; triggered = false;
-    document.addEventListener('mousemove', onMM);
-    document.addEventListener('mouseup', onMU);
+    beginDrag(e.clientY);
+    const onMove = (e) => moveDrag(e.clientY);
+    const onUp = (e) => { endDrag(e.clientY); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
 
   zone.addEventListener('touchstart', (e) => {
     e.stopPropagation(); e.preventDefault();
-    startY = e.touches[0].clientY; triggered = false;
-    document.addEventListener('touchmove', onTM, { passive: false });
-    document.addEventListener('touchend', onTE);
+    beginDrag(e.touches[0].clientY);
+    const onMove = (e) => { e.preventDefault(); moveDrag(e.touches[0].clientY); };
+    const onUp = (e) => { endDrag(e.changedTouches[0].clientY); document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onUp); };
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
   }, { passive: false });
 }
 
