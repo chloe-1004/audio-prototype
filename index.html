@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>오디오 설정 프로토타입</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #ebebeb;
+  height: 100vh;
+  overflow: hidden;
+  font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── TOP BAR ── */
+.bar {
+  flex-shrink: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  background: #ebebeb;
+  border-bottom: 1px solid #d4d4d4;
+}
+.bar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  flex: 1;
+}
+.bar-screen {
+  font-size: 11px;
+  color: #777;
+}
+.bar-btn {
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  color: #333;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.bar-btn:hover { background: #f0f0f0; color: #111; }
+.bar-btn.active { background: rgba(180,150,0,.12); border-color: rgba(180,150,0,.5); color: #7a6500; }
+
+/* ── STAGE ── */
+.stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* ── PHONE ── */
+.phone {
+  position: relative;
+  width: 393px;
+  height: 852px;
+  flex-shrink: 0;
+  transform-origin: center center;
+}
+.phone-shell {
+  position: absolute;
+  inset: 0;
+  background: #1c1c1e;
+  border-radius: 50px;
+  border: none;
+  box-shadow: 0 6px 10px rgba(0,0,0,.08);
+  overflow: hidden;
+}
+/* Side buttons */
+.phone-shell::before {
+  content: '';
+  position: absolute;
+  left: -4px; top: 140px;
+  width: 4px; height: 74px;
+  background: #3a3a3a;
+  border-radius: 3px 0 0 3px;
+  box-shadow: 0 48px 0 #3a3a3a;
+}
+.phone-shell::after {
+  content: '';
+  position: absolute;
+  right: -4px; top: 164px;
+  width: 4px; height: 56px;
+  background: #3a3a3a;
+  border-radius: 0 3px 3px 0;
+}
+
+/* ── SCREEN VIEWPORT ── */
+.screen-viewport {
+  position: absolute;
+  inset: 0;
+  border-radius: 48px;
+  overflow: hidden;
+}
+
+/* ── SCREEN SLIDES ── */
+.screen-slide {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.screen-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* slide transitions */
+.screen-slide.enter-from-right { transform: translateX(100%); }
+.screen-slide.enter-from-left  { transform: translateX(-100%); }
+.screen-slide.exit-to-left     { transform: translateX(-100%); }
+.screen-slide.exit-to-right    { transform: translateX(100%); }
+.screen-slide.transitioning    { transition: transform .28s cubic-bezier(.4,0,.2,1); }
+
+/* ── INTERACTIVE OVERLAY ── */
+.ix-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 48px;
+  overflow: hidden;
+  z-index: 9;
+  pointer-events: none;
+}
+
+/* Crop overlay */
+.crop-dim {
+  position: absolute;
+  top: 645px; height: 72px;
+  background: rgba(0,0,0,.55);
+  pointer-events: none;
+}
+.crop-dim.left  { left: 0; }
+.crop-dim.right { right: 0; }
+
+.crop-handle {
+  position: absolute;
+  width: 14px;
+  background: #FEE500;
+  border-radius: 4px;
+  cursor: ew-resize;
+  pointer-events: auto;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 12;
+  touch-action: none;
+}
+.crop-handle-bar {
+  width: 3px; height: 24px;
+  background: rgba(0,0,0,.4);
+  border-radius: 2px;
+}
+.crop-edge {
+  position: absolute;
+  height: 3px;
+  background: #FEE500;
+  pointer-events: none;
+  z-index: 11;
+}
+.crop-label {
+  position: absolute;
+  background: rgba(0,0,0,.7);
+  color: #FEE500;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 7px; border-radius: 10px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Volume overlay */
+.vol-track-bg {
+  position: absolute;
+  height: 4px;
+  background: rgba(255,255,255,.2);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.vol-track-fill {
+  position: absolute;
+  height: 4px;
+  background: #FEE500;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.vol-thumb {
+  position: absolute;
+  width: 20px; height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+  cursor: ew-resize;
+  pointer-events: auto;
+  z-index: 12;
+  touch-action: none;
+  transform: translate(-50%, -50%);
+}
+.vol-label {
+  position: absolute;
+  background: rgba(5,5,5,1);
+  color: #fff;
+  font-size: 11px; font-weight: 700;
+  padding: 4px 8px; border-radius: 10px;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* Playback overlay */
+.pb-bar-bg {
+  position: absolute;
+  height: 4px;
+  background: rgba(255,255,255,.25);
+  border-radius: 2px;
+}
+.pb-bar-fill {
+  position: absolute;
+  height: 4px;
+  background: rgba(255,255,255,.9);
+  border-radius: 2px;
+}
+.pb-dot {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.pb-row-cover {
+  position: absolute;
+}
+.pb-play-btn {
+  position: absolute;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 13;
+  border-radius: 8px;
+}
+.pb-play-icon {
+  position: absolute;
+  background: rgba(0,0,0,.52);
+  border-radius: 8px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 14;
+}
+.pb-time {
+  position: absolute;
+  font-size: 11px;
+  color: rgba(255,255,255,.92);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── HOTSPOT LAYER ── */
+.hs-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 48px;
+  overflow: visible;
+  z-index: 10;
+}
+.hs {
+  position: absolute;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background .12s, box-shadow .12s;
+}
+/* hover: always visible ripple */
+.hs:hover {
+  background: rgba(254,229,0,.18);
+  box-shadow: 0 0 0 2px rgba(254,229,0,.6);
+}
+.hs:active {
+  background: rgba(254,229,0,.35);
+}
+
+/* tooltip on hover */
+.hs-lbl {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #FEE500;
+  color: #111;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 99;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  line-height: 1.4;
+}
+.hs-lbl::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #FEE500;
+}
+.hs:hover .hs-lbl { display: block; }
+
+/* show-mode: always highlight all */
+.show-hs .hs {
+  background: rgba(254,229,0,.12);
+  box-shadow: 0 0 0 1.5px rgba(254,229,0,.5);
+}
+.show-hs .hs:hover {
+  background: rgba(254,229,0,.28);
+  box-shadow: 0 0 0 2px rgba(254,229,0,.9);
+}
+.show-hs .hs .hs-lbl { display: block; }
+
+/* ── OVERVIEW ── */
+#overview {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #111;
+  overflow-y: auto;
+  z-index: 100;
+  padding: 0;
+}
+#overview.open { display: block; }
+.ov-bar {
+  position: sticky;
+  top: 0;
+  background: rgba(17,17,17,.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #222;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  z-index: 10;
+}
+.ov-title { font-size: 14px; font-weight: 600; color: #f0f0f0; flex: 1; }
+.ov-close {
+  background: #2a2a2a; border: 1px solid #333; color: #f0f0f0;
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+}
+.ov-close:hover { background: #333; }
+.ov-body { padding: 24px 28px 60px; }
+.ov-group { margin-bottom: 32px; }
+.ov-group-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: #555; border-bottom: 1px solid #222; padding-bottom: 8px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.ov-group-num {
+  background: #FEE500; color: #111; font-size: 9px;
+  padding: 2px 6px; border-radius: 3px;
+}
+.ov-thumbs { display: flex; flex-wrap: wrap; gap: 12px; }
+.ov-thumb {
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  transition: transform .15s;
+}
+.ov-thumb:hover { transform: translateY(-2px); }
+.ov-thumb:hover .ov-frame { box-shadow: 0 0 0 2px #FEE500; }
+.ov-frame {
+  width: 72px; height: 156px;
+  border-radius: 8px; overflow: hidden;
+  background: #222; border: 1px solid #2a2a2a;
+  position: relative; transition: box-shadow .15s;
+}
+.ov-frame img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.ov-idx {
+  position: absolute; top: 3px; left: 3px;
+  background: rgba(0,0,0,.7); color: #fff;
+  font-size: 8px; padding: 1px 4px; border-radius: 3px;
+}
+.ov-name { font-size: 8px; color: #666; text-align: center; max-width: 72px; line-height: 1.3; word-break: keep-all; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-title">오디오 설정</div>
+  <div class="bar-screen" id="bar-screen"></div>
+  <button class="bar-btn" id="hs-btn" onclick="toggleHS()">핫스팟 보기</button>
+  <button class="bar-btn" onclick="openOverview()">전체 화면 보기</button>
+</div>
+
+<div class="stage">
+  <div class="phone" id="phone">
+    <div class="phone-shell">
+      <div class="screen-viewport" id="viewport">
+        <!-- screens injected here -->
+      </div>
+      <div class="ix-layer" id="ix-layer"></div>
+      <div class="hs-layer" id="hs-layer"></div>
+    </div>
+  </div>
+</div>
+
+<!-- OVERVIEW PANEL -->
+<div id="overview">
+  <div class="ov-bar">
+    <div class="ov-title">전체 화면</div>
+    <button class="ov-close" onclick="closeOverview()">← 프로토타입으로</button>
+  </div>
+  <div class="ov-body" id="ov-body"></div>
+</div>
+
+<script>
+const S = [
+  {f:"36_9536",  n:"동영상 선택",              g:"영상 선택"},        // 0
+  {f:"36_9615",  n:"편집뷰로 진입",             g:"영상편집"},        // 1
+  {f:"36_9701",  n:"기본",                     g:"영상편집"},        // 2
+  {f:"36_9783",  n:"영상 크롭",                 g:"영상편집"},        // 3
+  {f:"36_9869",  n:"영상 크롭 최소 단위",        g:"영상편집"},        // 4
+  {f:"36_9948",  n:"영상 선택 해제",             g:"영상편집"},        // 5
+  {f:"36_10026", n:"음원 볼륨 조절",             g:"음원 볼륨 조절"},  // 6
+  {f:"36_10170", n:"영상 볼륨 조절 1",           g:"영상볼륨 조절"},   // 7
+  {f:"36_10224", n:"영상 볼륨 조절 2",           g:"영상볼륨 조절"},   // 8
+  {f:"36_10125", n:"오디오 추가 전",             g:"미리보기"},        // 9
+  {f:"36_10433", n:"오디오 추가 완료",           g:"미리보기"},        // 10
+  {f:"36_10289", n:"메타 정보 입력",             g:"메타 정보 입력"},  // 11
+  {f:"36_17790", n:"미리보기 화면",              g:"미리보기 화면"},   // 12
+  {f:"36_22367", n:"오디오 목록 진입",           g:"오디오 선택"},     // 13
+  {f:"36_22565", n:"오디오 재생",               g:"오디오 선택"},     // 14
+  {f:"36_22798", n:"오디오 재생 중",             g:"오디오 선택"},     // 15
+  {f:"36_10492", n:"오디오 추가 완료",           g:"오디오 크롭"},     // 16
+  {f:"36_10796", n:"오디오 크롭",               g:"오디오 크롭"},     // 17
+  {f:"36_12474", n:"오디오 크롭 2",             g:"오디오 크롭"},     // 18
+  {f:"36_12776", n:"오디오 바 이동",             g:"오디오 이동"},     // 19
+  {f:"36_13073", n:"오디오 이동",               g:"오디오 이동"},     // 20
+  {f:"36_13635", n:"구간 편집 1안",             g:"오디오 구간 선택"},// 21
+  {f:"36_13369", n:"구간 편집 2안",             g:"오디오 구간 선택"},// 22
+  {f:"36_13898", n:"영상 크롭 후 오디오 1",      g:"오디오 추가 후 영상 크롭"}, // 23
+  {f:"36_14199", n:"영상 크롭 후 오디오 2",      g:"오디오 추가 후 영상 크롭"}, // 24
+  {f:"36_14496", n:"볼륨 조절 1",              g:"볼륨 조절"},       // 25
+  {f:"36_14806", n:"볼륨 조절 2",              g:"볼륨 조절"},       // 26
+  {f:"36_15106", n:"볼륨 조절 3",              g:"볼륨 조절"},       // 27
+  {f:"36_11098", n:"음원 최소 크롭",            g:"음원 길이 케이스"}, // 28
+  {f:"36_11400", n:"구간 편집 2안",             g:"음원 길이 케이스"}, // 29
+  {f:"36_11703", n:"선택 해제",                g:"음원 길이 케이스"}, // 30
+];
+
+// Hotspots: coordinates normalized 0-1 over 393x852 screen
+// Based on actual Figma node positions:
+//   Nav back  (leading):   x=16,  y=53, w=44, h=44
+//   Nav next  (trailing):  x=300, y=53, w=93, h=44
+//   Bottom toolbar full:   x=0,   y=760, w=393, h=92
+//   Audio tab (4th):       x=345, y=769, w=36,  h=49
+//   오디오추가 btn (S9):   x=140, y=117, w=112, h=36
+//   오디오추가 btn (S10):  x=91,  y=117, w=209, h=36
+const px = (x,y,w,h) => ({x:x/393, y:y/852, w:w/393, h:h/852});
+
+const HOTSPOTS = {
+  0:  [                                                                         // 동영상 선택
+        {to:1, label:"영상 선택",    ...px(60,120,270,620)},
+      ],
+  1:  [ {to:2,  label:"다음",          ...px(300,53,93,44)},                   // 편집뷰로 진입
+        {to:13, label:"+ 오디오 추가", ...px(0,700,393,52)},
+        {to:0,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  2:  [ {to:3,  label:"다음",          ...px(300,53,93,44)},                   // 기본
+        {to:13, label:"+ 오디오 추가", ...px(0,700,393,52)},
+        {to:1,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  3:  [ {to:4,  label:"다음",          ...px(300,53,93,44)},                   // 영상 크롭
+        {to:2,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  4:  [ {to:5,  label:"다음",          ...px(300,53,93,44)},                   // 영상 크롭 최소
+        {to:3,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  5:  [ {to:6,  label:"다음",          ...px(300,53,93,44)},                   // 영상 선택 해제
+        {to:4,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  6:  [ {to:7,  label:"다음",          ...px(300,53,93,44)},                   // 음원 볼륨 조절
+        {to:5,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  7:  [ {to:8,  label:"다음",          ...px(300,53,93,44)},                   // 영상 볼륨 조절 1
+        {to:6,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  8:  [ {to:9,  label:"다음",          ...px(300,53,93,44)},                   // 영상 볼륨 조절 2
+        {to:7,  label:"뒤로",          ...px(16,53,44,44)},
+      ],
+  9:  [ {to:13, label:"오디오 추가",...px(140,117,112,36)},                    // 오디오 추가 전
+        {to:10, label:"다음",       ...px(300,53,93,44)},
+        {to:8,  label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  10: [ {to:13, label:"오디오 편집",...px(91,117,209,36)},                     // 오디오 추가 완료
+        {to:11, label:"다음",       ...px(300,53,93,44)},
+        {to:9,  label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  11: [ {to:12, label:"다음",       ...px(300,53,93,44)},                      // 메타 정보 입력
+        {to:10, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  12: [ {to:11, label:"뒤로",       ...px(16,53,44,44)},                       // 미리보기 화면
+      ],
+  13: [ {to:14, label:"오디오 선택",...px(0,418,393,380)},                     // 오디오 목록 진입 (리스트 영역 y=418~)
+        {to:16, label:"다음",        ...px(305,53,72,44)},                      // 상단 '다음' 버튼 → S16
+        {to:9,  label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  14: [ {to:16, label:"음원 추가",   ...px(304,53,89,44)},                     // 상단 '다음' 버튼
+        {to:16, label:"음원 추가",   ...px(285,162,108,82)},                    // → 버튼 (넓은 타겟 영역)
+        {to:13, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  15: [ {to:16, label:"추가",       ...px(300,53,93,44)},                      // 오디오 재생 중
+        {to:14, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  16: [ {to:17, label:"크롭 시작",  ...px(300,53,93,44)},                      // 오디오 추가 완료
+        {to:23, label:"영상 크롭",  ...px(0,760,393,92)},
+        {to:15, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  17: [ {to:18, label:"다음",       ...px(300,53,93,44)},                      // 오디오 크롭
+        {to:16, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  18: [ {to:19, label:"다음",       ...px(300,53,93,44)},                      // 오디오 크롭 2
+        {to:17, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  19: [ {to:20, label:"이동",       ...px(300,53,93,44)},                      // 오디오 바 이동
+        {to:25, label:"볼륨 조절",  ...px(0,760,393,92)},
+        {to:18, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  20: [ {to:21, label:"구간 편집",  ...px(300,53,93,44)},                      // 오디오 이동
+        {to:27, label:"음원 길이",  ...px(0,760,393,92)},
+        {to:19, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  21: [ {to:22, label:"다음",       ...px(300,53,93,44)},                      // 구간 편집 1안
+        {to:20, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  22: [ {to:29, label:"음원 구간",  ...px(300,53,93,44)},                      // 구간 편집 2안
+        {to:21, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  23: [ {to:24, label:"다음",       ...px(300,53,93,44)},                      // 영상 크롭 후 오디오 1
+        {to:16, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  24: [ {to:25, label:"다음",       ...px(300,53,93,44)},                      // 영상 크롭 후 오디오 2
+        {to:23, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  25: [ {to:26, label:"다음",       ...px(300,53,93,44)},                      // 볼륨 조절 1
+        {to:24, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  26: [ {to:27, label:"다음",       ...px(300,53,93,44)},                      // 볼륨 조절 2
+        {to:25, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  27: [ {to:28, label:"다음",       ...px(300,53,93,44)},                      // 볼륨 조절 3
+        {to:26, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  28: [ {to:29, label:"다음",       ...px(300,53,93,44)},                      // 음원 최소 크롭
+        {to:27, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  29: [ {to:30, label:"다음",       ...px(300,53,93,44)},                      // 구간 편집 2안
+        {to:28, label:"뒤로",       ...px(16,53,44,44)},
+      ],
+  30: [ {to:29, label:"뒤로",       ...px(16,53,44,44)},                       // 선택 해제
+      ],
+};
+
+// ── STATE ──────────────────────────────────────────────────────
+let cur = 0;
+let busy = false;
+let showHS = false;
+
+// ── SCALE ──────────────────────────────────────────────────────
+function scale() {
+  const ph = document.getElementById('phone');
+  const sw = window.innerWidth, sh = window.innerHeight - 48;
+  const s = Math.min(1, (sh - 40) / 852, (sw - 80) / 393);
+  ph.style.transform = 'scale(' + s + ')';
+  ph.style.marginTop = ((s - 1) * 852 / 2) + 'px';
+  ph.style.marginBottom = ((s - 1) * 852 / 2) + 'px';
+}
+window.addEventListener('resize', scale);
+
+// ── SCREEN TRANSITION ──────────────────────────────────────────
+function navigate(toIdx, dir) {
+  if (busy || toIdx === cur || toIdx < 0 || toIdx >= S.length) return;
+  busy = true;
+
+  const vp = document.getElementById('viewport');
+  const direction = dir !== undefined ? dir : (toIdx > cur ? 1 : -1);
+
+  // Current slide
+  const curSlide = vp.querySelector('.screen-slide');
+
+  // New slide
+  const newSlide = document.createElement('div');
+  newSlide.className = 'screen-slide';
+  const img = document.createElement('img');
+  img.src = 'images/' + S[toIdx].f + '.png';
+  img.draggable = false;
+  newSlide.appendChild(img);
+
+  // Position new slide off-screen based on direction
+  let newStart, curEnd;
+  if (direction === 'up') {
+    newStart = 'translateY(100%)';
+    curEnd   = 'translateY(-8%)';
+  } else if (direction === 'down') {
+    newStart = 'translateY(-100%)';
+    curEnd   = 'translateY(8%)';
+  } else {
+    newStart = direction > 0 ? 'translateX(100%)' : 'translateX(-100%)';
+    curEnd   = direction > 0 ? 'translateX(-100%)' : 'translateX(100%)';
+  }
+
+  newSlide.style.transform = newStart;
+  vp.appendChild(newSlide);
+
+  // Force reflow
+  newSlide.getBoundingClientRect();
+
+  // Animate both slides
+  const dur = '0.28s';
+  const ease = 'cubic-bezier(0.4,0,0.2,1)';
+
+  curSlide.style.transition = `transform ${dur} ${ease}`;
+  newSlide.style.transition  = `transform ${dur} ${ease}`;
+
+  curSlide.style.transform = curEnd;
+  newSlide.style.transform = 'none';
+
+  setTimeout(() => {
+    curSlide.remove();
+    newSlide.style.transition = '';
+    newSlide.style.transform = '';
+    cur = toIdx;
+    busy = false;
+    updateMeta();
+    renderHS();
+    mountOverlay(cur);
+  }, 290);
+}
+
+// ── META ───────────────────────────────────────────────────────
+function updateMeta() {
+  document.getElementById('bar-screen').textContent = S[cur].g + '  ·  ' + S[cur].n;
+}
+
+// ── HOTSPOTS ───────────────────────────────────────────────────
+function renderHS() {
+  const layer = document.getElementById('hs-layer');
+  layer.innerHTML = '';
+  layer.className = 'hs-layer' + (showHS ? ' show-hs' : '');
+
+  (HOTSPOTS[cur] || []).forEach(hs => {
+    const el = document.createElement('div');
+    el.className = 'hs';
+    el.style.left   = (hs.x * 100) + '%';
+    el.style.top    = (hs.y * 100) + '%';
+    el.style.width  = (hs.w * 100) + '%';
+    el.style.height = (hs.h * 100) + '%';
+    el.onclick = () => navigate(hs.to);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'hs-lbl';
+    lbl.textContent = hs.label + ' → ' + S[hs.to].n;
+    el.appendChild(lbl);
+    layer.appendChild(el);
+  });
+}
+
+function toggleHS() {
+  showHS = !showHS;
+  const btn = document.getElementById('hs-btn');
+  btn.classList.toggle('active', showHS);
+  btn.textContent = showHS ? '핫스팟 숨기기' : '핫스팟 보기';
+  renderHS();
+}
+
+// ── OVERVIEW ───────────────────────────────────────────────────
+function openOverview() {
+  const el = document.getElementById('ov-body');
+  if (!el.innerHTML) buildOverview();
+  document.getElementById('overview').classList.add('open');
+}
+function closeOverview() {
+  document.getElementById('overview').classList.remove('open');
+}
+function buildOverview() {
+  const el = document.getElementById('ov-body');
+  const groups = {};
+  S.forEach((s, i) => { if (!groups[s.g]) groups[s.g] = []; groups[s.g].push({...s, i}); });
+  let gi = 0, html = '';
+  for (const [g, screens] of Object.entries(groups)) {
+    gi++;
+    html += '<div class="ov-group"><div class="ov-group-title"><span class="ov-group-num">' + gi + '</span>' + g + '</div><div class="ov-thumbs">';
+    screens.forEach(s => {
+      html += '<div class="ov-thumb" onclick="jumpTo(' + s.i + ')">' +
+        '<div class="ov-frame"><div class="ov-idx">' + (s.i+1) + '</div>' +
+        '<img src="images/' + s.f + '.png" loading="lazy"></div>' +
+        '<div class="ov-name">' + s.n + '</div></div>';
+    });
+    html += '</div></div>';
+  }
+  el.innerHTML = html;
+}
+function jumpTo(idx) {
+  closeOverview();
+  // Direct jump without animation
+  const vp = document.getElementById('viewport');
+  const old = vp.querySelector('.screen-slide');
+  if (old) old.remove();
+  const sl = document.createElement('div');
+  sl.className = 'screen-slide';
+  const img = document.createElement('img');
+  img.src = 'images/' + S[idx].f + '.png';
+  img.draggable = false;
+  sl.appendChild(img);
+  vp.appendChild(sl);
+  cur = idx;
+  busy = false;
+  updateMeta();
+  renderHS();
+  mountOverlay(cur);
+}
+
+// ── INTERACTIVE OVERLAYS ───────────────────────────────────────
+// Exact Figma coordinates (in 393x852 px space)
+const OVERLAYS = {
+  13: { type:'sheet-drag', handleY:308, target:14, threshold:50 },
+  3: { type:'crop', range:[45,315], handles:[45,315], timelineY:653, timelineH:54, outerY:613, outerH:156 },
+  4: { type:'crop', range:[45,315], handles:[185,279], timelineY:653, timelineH:54, outerY:613, outerH:156 },
+  14: { type:'playback', barX:56, barY:245, barW:281, barH:4, dotY:241, dotSize:12, timeX:16, timeY:240, duration:58 },
+  6: { type:'volume', label:'음원 볼륨', trackX:25, trackY:734, trackW:326, initPct:0.80, max:200 },
+  7: { type:'volume', label:'영상 볼륨', trackX:25, trackY:734, trackW:326, initPct:1.00, max:100 },
+  8: { type:'volume', label:'영상 볼륨', trackX:25, trackY:734, trackW:326, initPct:0.47, max:100 },
+  // track-toggle: S17/S18/S19 — click video↔audio to switch selection
+  17: { type:'track-toggle',
+        video: { y:659, h:48, lx:26, rx:372 },   // video filmstrip
+        audio: { y:715, h:38, lx:28, rx:362 } },  // audio waveform bar
+  18: { type:'track-toggle',
+        video: { y:659, h:48, lx:26, rx:372 },
+        audio: { y:715, h:38, lx:28, rx:362 } },
+  19: { type:'track-toggle',
+        video: { y:659, h:48, lx:12, rx:358 },
+        audio: { y:715, h:38, lx:12, rx:152 } },
+};
+
+// state per screen (persists while prototype is open)
+const ixState = {};
+
+function mountOverlay(screenIdx) {
+  const layer = document.getElementById('ix-layer');
+  if (layer._stopPlayback) { layer._stopPlayback(); layer._stopPlayback = null; }
+  layer.innerHTML = '';
+  layer.style.pointerEvents = 'none';
+
+  const cfg = OVERLAYS[screenIdx];
+  if (!cfg) return;
+
+  if (!ixState[screenIdx]) {
+    if (cfg.type === 'crop') ixState[screenIdx] = { lx: cfg.handles[0], rx: cfg.handles[1] };
+    else if (cfg.type === 'volume') ixState[screenIdx] = { pct: cfg.initPct };
+    else if (cfg.type === 'playback') ixState[screenIdx] = { elapsed: 0, paused: false };
+    else if (cfg.type === 'track-toggle') ixState[screenIdx] = {
+      selected: 'audio',
+      video: { lx: cfg.video.lx, rx: cfg.video.rx },
+      audio: { lx: cfg.audio.lx, rx: cfg.audio.rx },
+    };
+    else if (cfg.type === 'sheet-drag') ixState[screenIdx] = {};
+  }
+
+  if (cfg.type === 'crop') mountCrop(layer, cfg, ixState[screenIdx], screenIdx);
+  if (cfg.type === 'volume') mountVolume(layer, cfg, ixState[screenIdx]);
+  if (cfg.type === 'playback') mountPlayback(layer, cfg, ixState[screenIdx]);
+  if (cfg.type === 'track-toggle') mountTrackToggle(layer, cfg, ixState[screenIdx]);
+  if (cfg.type === 'sheet-drag') mountSheetDrag(layer, cfg, ixState[screenIdx]);
+}
+
+function getPhoneScale() {
+  const ph = document.getElementById('phone');
+  const m = new DOMMatrix(getComputedStyle(ph).transform);
+  return m.a || 1;
+}
+
+// ── CROP ──────────────────────────────────────────────────────
+function mountCrop(layer, cfg, state, screenIdx) {
+  layer.style.pointerEvents = 'auto';
+
+  const ty = cfg.timelineY, th = cfg.timelineH, hw = 14;
+  const oy = cfg.outerY || ty, oh = cfg.outerH || th;
+
+  // Sprite cover: replaces the static filmstrip image so our overlay is the only thing showing
+  const spriteCover = mk('div', '');
+  spriteCover.style.cssText = `position:absolute; left:0; top:${oy}px; width:393px; height:${oh}px; background-image:url('images/${S[screenIdx].f}.png'); background-size:393px 852px; background-position:0 -${oy}px; pointer-events:none; z-index:8;`;
+
+  const dimL    = mk('div', 'crop-dim left');
+  const dimR    = mk('div', 'crop-dim right');
+  const edgeT   = mk('div', 'crop-edge');
+  const edgeB   = mk('div', 'crop-edge');
+  const handleL = mk('div', 'crop-handle');
+  const handleR = mk('div', 'crop-handle');
+  handleL.appendChild(mk('div','crop-handle-bar'));
+  handleR.appendChild(mk('div','crop-handle-bar'));
+  const label = mk('div', 'crop-label');
+
+  layer.append(spriteCover, dimL, dimR, edgeT, edgeB, handleL, handleR, label);
+
+  function render() {
+    const lx = state.lx, rx = state.rx;
+    const selW = rx + hw - lx;
+
+    dimL.style.cssText = `top:${ty}px; height:${th}px; left:0; width:${lx}px; position:absolute; background:rgba(0,0,0,.55); pointer-events:none;`;
+    dimR.style.cssText = `top:${ty}px; height:${th}px; right:0; width:${393 - rx - hw}px; position:absolute; background:rgba(0,0,0,.55); pointer-events:none;`;
+
+    edgeT.style.cssText = `top:${ty}px; left:${lx}px; width:${selW}px; position:absolute;`;
+    edgeB.style.cssText = `top:${ty + th - 3}px; left:${lx}px; width:${selW}px; position:absolute;`;
+
+    handleL.style.cssText = `top:${ty}px; left:${lx}px; height:${th}px; width:${hw}px; position:absolute; background:#FEE500; border-radius:3px 0 0 3px; cursor:ew-resize; display:flex; align-items:center; justify-content:center; z-index:12; touch-action:none;`;
+    handleR.style.cssText = `top:${ty}px; left:${rx}px; height:${th}px; width:${hw}px; position:absolute; background:#FEE500; border-radius:0 3px 3px 0; cursor:ew-resize; display:flex; align-items:center; justify-content:center; z-index:12; touch-action:none;`;
+
+    const durationPx = rx - lx - hw;
+    const totalPx = cfg.range[1] - cfg.range[0];
+    const sec = Math.max(0, durationPx / totalPx * 5).toFixed(1);
+    label.textContent = sec + 's';
+    label.style.cssText = `left:${lx + selW / 2 - 16}px; top:${ty + th + 4}px; position:absolute; background:rgba(0,0,0,.7); color:#FEE500; font-size:10px; font-weight:700; padding:3px 7px; border-radius:10px; pointer-events:none; white-space:nowrap;`;
+  }
+  render();
+
+  makeDraggable(handleL, (dx) => {
+    const s = getPhoneScale();
+    state.lx = Math.max(cfg.range[0], Math.min(state.rx - hw * 2 - 10, state.lx + dx / s));
+    render();
+  });
+  makeDraggable(handleR, (dx) => {
+    const s = getPhoneScale();
+    state.rx = Math.min(cfg.range[1], Math.max(state.lx + hw * 2 + 10, state.rx + dx / s));
+    render();
+  });
+}
+
+// ── VOLUME ────────────────────────────────────────────────────
+function mountVolume(layer, cfg, state) {
+  layer.style.pointerEvents = 'auto';
+
+  const trackBg   = mk('div','vol-track-bg');
+  const trackFill = mk('div','vol-track-fill');
+  const thumb     = mk('div','vol-thumb');
+  const label     = mk('div','vol-label');
+
+  layer.append(trackBg, trackFill, thumb, label);
+
+  const ty = cfg.trackY;
+  trackBg.style.cssText = `left:${cfg.trackX}px; top:${ty}px; width:${cfg.trackW}px;`;
+
+  function render() {
+    const x = cfg.trackX + state.pct * cfg.trackW;
+    trackFill.style.cssText = `left:${cfg.trackX}px; top:${ty}px; width:${state.pct * cfg.trackW}px;`;
+    thumb.style.cssText = `left:${x}px; top:${ty + 2}px; position:absolute;`;
+    const val = Math.round(state.pct * cfg.max);
+    label.textContent = cfg.max === 200 ? val + '' : val + '%';
+    label.style.cssText = `left:${x}px; top:${ty - 26}px; position:absolute;`;
+  }
+  render();
+
+  makeDraggable(thumb, (dx) => {
+    const s = getPhoneScale();
+    state.pct = Math.max(0, Math.min(1, state.pct + (dx / s) / cfg.trackW));
+    render();
+  });
+}
+
+// ── PLAYBACK ──────────────────────────────────────────────────
+function mountPlayback(layer, cfg, state) {
+  const rowCover = mk('div', 'pb-row-cover');
+  rowCover.style.cssText = `left:0; top:${cfg.timeY - 4}px; width:393px; height:${cfg.dotSize + 10}px; background:#151515;`;
+
+  const barBg   = mk('div', 'pb-bar-bg');
+  const barFill = mk('div', 'pb-bar-fill');
+  const dot     = mk('div', 'pb-dot');
+  const timeEl  = mk('div', 'pb-time');
+  const timeTot = mk('div', 'pb-time');
+  const playBtn  = mk('div', 'pb-play-btn');
+  const playIcon = mk('div', 'pb-play-icon');
+
+  layer.append(rowCover, barBg, barFill, dot, timeEl, timeTot, playBtn, playIcon);
+
+  barBg.style.cssText   = `left:${cfg.barX}px; top:${cfg.barY}px; width:${cfg.barW}px;`;
+  barFill.style.cssText = `left:${cfg.barX}px; top:${cfg.barY}px; width:0;`;
+  dot.style.cssText     = `left:${cfg.barX}px; top:${cfg.dotY}px; width:${cfg.dotSize}px; height:${cfg.dotSize}px;`;
+  timeEl.style.cssText  = `left:${cfg.timeX}px; top:${cfg.timeY}px;`;
+  timeTot.style.cssText = `left:${cfg.barX + cfg.barW}px; top:${cfg.timeY}px;`;
+
+  // Album art area: rel=(16,182) size=48x48
+  playBtn.style.cssText  = `left:16px; top:182px; width:48px; height:48px;`;
+  playIcon.style.cssText = `left:16px; top:182px; width:48px; height:48px;`;
+  playIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20"><polygon points="6,3 18,10 6,17" fill="white"/></svg>`;
+
+  function fmt(sec) {
+    const s = Math.floor(sec);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  timeTot.textContent = fmt(cfg.duration);
+
+  let rafId = null;
+  let startTs = performance.now() - (state.elapsed || 0) * 1000;
+
+  function updateFrame(elapsed) {
+    const pct = elapsed / cfg.duration;
+    barFill.style.width = (pct * cfg.barW) + 'px';
+    dot.style.left = (cfg.barX + pct * (cfg.barW - cfg.dotSize)) + 'px';
+    timeEl.textContent = fmt(elapsed);
+  }
+
+  function tick(now) {
+    const elapsed = ((now - startTs) / 1000) % cfg.duration;
+    state.elapsed = elapsed;
+    updateFrame(elapsed);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function pausePlayback() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    state.paused = true;
+    playIcon.style.display = 'flex';
+  }
+
+  function resumePlayback() {
+    startTs = performance.now() - (state.elapsed || 0) * 1000;
+    state.paused = false;
+    playIcon.style.display = 'none';
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // Start
+  if (state.paused) {
+    updateFrame(state.elapsed || 0);
+    playIcon.style.display = 'flex';
+  } else {
+    resumePlayback();
+  }
+
+  playBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (state.paused) resumePlayback(); else pausePlayback();
+  });
+
+  layer._stopPlayback = () => { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } };
+}
+
+// ── TRACK TOGGLE ──────────────────────────────────────────────
+function mountTrackToggle(layer, cfg, state) {
+  layer.style.pointerEvents = 'auto';
+
+  const hw = 14;
+  const edgeT = mk('div','crop-edge');
+  const edgeB = mk('div','crop-edge');
+  const hndL  = mk('div','crop-handle'); hndL.appendChild(mk('div','crop-handle-bar'));
+  const hndR  = mk('div','crop-handle'); hndR.appendChild(mk('div','crop-handle-bar'));
+  const zoneV = mk('div',''); // click zone for video track
+  const zoneA = mk('div',''); // click zone for audio track
+
+  layer.append(edgeT, edgeB, hndL, hndR, zoneV, zoneA);
+
+  function render() {
+    const sel  = state.selected;
+    const track = cfg[sel];             // current track config (video or audio)
+    const hs    = state[sel];           // current handle positions
+
+    // Yellow selection frame
+    const selW = hs.rx + hw - hs.lx;
+    edgeT.style.cssText = `top:${track.y}px; left:${hs.lx}px; width:${selW}px; position:absolute;`;
+    edgeB.style.cssText = `top:${track.y + track.h - 3}px; left:${hs.lx}px; width:${selW}px; position:absolute;`;
+    hndL.style.cssText  = `top:${track.y}px; left:${hs.lx}px; height:${track.h}px; width:${hw}px; position:absolute; background:#FEE500; border-radius:3px 0 0 3px; cursor:ew-resize; display:flex; align-items:center; justify-content:center; z-index:12; touch-action:none;`;
+    hndR.style.cssText  = `top:${track.y}px; left:${hs.rx}px; height:${track.h}px; width:${hw}px; position:absolute; background:#FEE500; border-radius:0 3px 3px 0; cursor:ew-resize; display:flex; align-items:center; justify-content:center; z-index:12; touch-action:none;`;
+
+    // Click zones — non-selected track is clickable, selected is not (handles take over)
+    const vt = cfg.video, at = cfg.audio;
+    zoneV.style.cssText = `top:${vt.y}px; left:0; width:393px; height:${vt.h}px; position:absolute; z-index:11; cursor:${sel==='video'?'default':'pointer'}; pointer-events:${sel==='video'?'none':'auto'};`;
+    zoneA.style.cssText = `top:${at.y}px; left:0; width:393px; height:${at.h}px; position:absolute; z-index:11; cursor:${sel==='audio'?'default':'pointer'}; pointer-events:${sel==='audio'?'none':'auto'};`;
+  }
+  render();
+
+  makeDraggable(hndL, (dx) => {
+    const s = getPhoneScale();
+    const track = cfg[state.selected], hs = state[state.selected];
+    hs.lx = Math.max(track.lx, Math.min(hs.rx - hw * 2 - 10, hs.lx + dx / s));
+    render();
+  });
+  makeDraggable(hndR, (dx) => {
+    const s = getPhoneScale();
+    const track = cfg[state.selected], hs = state[state.selected];
+    hs.rx = Math.min(track.rx, Math.max(hs.lx + hw * 2 + 10, hs.rx + dx / s));
+    render();
+  });
+
+  zoneV.addEventListener('click', () => { state.selected = 'video'; render(); });
+  zoneA.addEventListener('click', () => { state.selected = 'audio'; render(); });
+}
+
+// ── SHEET DRAG ───────────────────────────────────────────────
+function mountSheetDrag(layer, cfg, state) {
+  layer.style.pointerEvents = 'auto';
+
+  // Hit zone: covers the pill handle area and a bit above/below
+  const zone = mk('div', '');
+  zone.style.cssText = `position:absolute; left:0; top:${cfg.handleY - 40}px; width:393px; height:100px; cursor:grab; z-index:12; touch-action:none;`;
+  layer.appendChild(zone);
+
+  let startY = null;
+  let triggered = false;
+
+  function tryNav() {
+    if (triggered) return;
+    triggered = true;
+    navigate(cfg.target, 'up');
+  }
+
+  function onMove(y) {
+    if (triggered) return;
+    if (startY - y > cfg.threshold) tryNav();
+  }
+
+  function onUp(y) {
+    if (!triggered) tryNav();
+    cleanup();
+  }
+
+  function cleanup() {
+    document.removeEventListener('mousemove', onMM);
+    document.removeEventListener('mouseup', onMU);
+    document.removeEventListener('touchmove', onTM);
+    document.removeEventListener('touchend', onTE);
+  }
+
+  function onMM(e) { onMove(e.clientY); }
+  function onMU(e) { onUp(e.clientY); }
+  function onTM(e) { e.preventDefault(); onMove(e.touches[0].clientY); }
+  function onTE(e) { onUp(e.changedTouches[0].clientY); }
+
+  zone.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    startY = e.clientY; triggered = false;
+    document.addEventListener('mousemove', onMM);
+    document.addEventListener('mouseup', onMU);
+  });
+
+  zone.addEventListener('touchstart', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    startY = e.touches[0].clientY; triggered = false;
+    document.addEventListener('touchmove', onTM, { passive: false });
+    document.addEventListener('touchend', onTE);
+  }, { passive: false });
+}
+
+// ── DRAG HELPER ───────────────────────────────────────────────
+function makeDraggable(el, onMove) {
+  let startX = 0;
+
+  el.addEventListener('mousedown', start);
+  el.addEventListener('touchstart', startT, { passive: false });
+
+  function start(e) {
+    e.stopPropagation(); e.preventDefault();
+    startX = e.clientX;
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', end);
+  }
+  function startT(e) {
+    e.stopPropagation(); e.preventDefault();
+    startX = e.touches[0].clientX;
+    document.addEventListener('touchmove', moveT, { passive: false });
+    document.addEventListener('touchend', endT);
+  }
+  function move(e) {
+    onMove(e.clientX - startX);
+    startX = e.clientX;
+  }
+  function moveT(e) {
+    e.preventDefault();
+    onMove(e.touches[0].clientX - startX);
+    startX = e.touches[0].clientX;
+  }
+  function end()  { document.removeEventListener('mousemove', move);  document.removeEventListener('mouseup', end); }
+  function endT() { document.removeEventListener('touchmove', moveT); document.removeEventListener('touchend', endT); }
+}
+
+function mk(tag, cls) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  return el;
+}
+
+// ── INIT ───────────────────────────────────────────────────────
+function init() {
+  scale();
+
+  // Create initial screen
+  const vp = document.getElementById('viewport');
+  const sl = document.createElement('div');
+  sl.className = 'screen-slide';
+  const img = document.createElement('img');
+  img.src = 'images/' + S[0].f + '.png';
+  img.draggable = false;
+  sl.appendChild(img);
+  vp.appendChild(sl);
+
+  updateMeta();
+  renderHS();
+  mountOverlay(cur);
+}
+
+init();
+</script>
+</body>
+</html>
